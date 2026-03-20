@@ -10,6 +10,8 @@ ListModel {
     property string contentType
     property bool loading: false
     property int numberOfElements: 0
+    property string cursor: null
+    property bool hasNextPage: false
 
     property string query
 
@@ -17,45 +19,142 @@ ListModel {
         if (query.length === 0) return
 
         loading = true
+        cursor = null
 
-        Api.request(query.replace("{offset}", String(0)), function(data, status) {
-            loading = false
-            if (status !== 200) {
-                //% "Failed to fetch data"
-                notify.show(qsTrId("id-failed-to-fetch-data"))
-                return
-            }
-            //console.log(JSON.stringify(data["data"][contentKey]))
-            clear()
-            content = data["data"][contentKey]
-            if (data["data"][contentKey].hasOwnProperty("numberOfElements")) {
-                numberOfElements = data["data"][contentKey]["numberOfElements"]
-            } else if (data["data"][contentKey]["items"].hasOwnProperty("numberOfElements")) {
-                numberOfElements = data["data"][contentKey]["items"]["numberOfElements"]
-            }
-
-            addPodcasts(data["data"][contentKey]["items"]["nodes"])
-        })
+        if (query.includes("/search")) {
+            // Parse search query
+            var params = query.split("?")[1].split("&")
+            var searchText = decodeURIComponent(params.find(p => p.startsWith("query=")).split("=")[1])
+            Api.graphql(`
+                query($query: String!, $first: Int!, $after: String) {
+                  search(query: $query, first: $first, after: $after) {
+                    totalCount
+                    pageInfo {
+                      hasNextPage
+                      endCursor
+                    }
+                    nodes {
+                      __typename
+                      ... on Item {
+                        id
+                        title
+                        synopsis
+                        duration
+                        publishDate
+                        image { url1X1 }
+                        audios { url downloadUrl mimeType allowDownload }
+                        programSet { title }
+                        publicationService { title }
+                      }
+                      ... on ProgramSet {
+                        id
+                        title
+                        synopsis
+                        numberOfElements
+                        image { url1X1 }
+                      }
+                    }
+                  }
+                }
+            `, { query: searchText, first: 20, after: null }, function(data, status) {
+                loading = false
+                if (status !== 200) {
+                    notify.show(qsTrId("id-failed-to-fetch-data"))
+                    return
+                }
+                clear()
+                var searchResult = data["data"]["search"]
+                content = { items: { nodes: searchResult.nodes }, numberOfElements: searchResult.totalCount }
+                numberOfElements = searchResult.totalCount
+                cursor = searchResult.pageInfo.endCursor
+                hasNextPage = searchResult.pageInfo.hasNextPage
+                addPodcasts(searchResult.nodes)
+            })
+        } else {
+            // Fallback to REST for other queries
+            Api.request(query.replace("{offset}", String(0)), function(data, status) {
+                loading = false
+                if (status !== 200) {
+                    notify.show(qsTrId("id-failed-to-fetch-data"))
+                    return
+                }
+                clear()
+                content = data["data"][contentKey]
+                if (data["data"][contentKey].hasOwnProperty("numberOfElements")) {
+                    numberOfElements = data["data"][contentKey]["numberOfElements"]
+                } else if (data["data"][contentKey]["items"].hasOwnProperty("numberOfElements")) {
+                    numberOfElements = data["data"][contentKey]["items"]["numberOfElements"]
+                }
+                addPodcasts(data["data"][contentKey]["items"]["nodes"])
+            })
+        }
     }
 
     function loadMore() {
         if (query.length === 0) return
-        if (count === numberOfElements || count === 0) return
+        if (!hasNextPage || loading) return
+
         loading = true
-        Api.request(query.replace("{offset}", String(count)), function(data, status) {
-            loading = false
-            if (status !== 200) {
-                //% "Failed to fetch data"
-                notify.show(qsTrId("id-failed-to-fetch-data"))
-                return
-            }
 
-            var obj = content
-            obj["items"]["nodes"] = content["items"]["nodes"].concat(data["data"][contentKey]["items"]["nodes"])
-            content = obj
-
-            addPodcasts(data["data"][contentKey]["items"]["nodes"])
-        })
+        if (query.includes("/search")) {
+            var params = query.split("?")[1].split("&")
+            var searchText = decodeURIComponent(params.find(p => p.startsWith("query=")).split("=")[1])
+            Api.graphql(`
+                query($query: String!, $first: Int!, $after: String) {
+                  search(query: $query, first: $first, after: $after) {
+                    pageInfo {
+                      hasNextPage
+                      endCursor
+                    }
+                    nodes {
+                      __typename
+                      ... on Item {
+                        id
+                        title
+                        synopsis
+                        duration
+                        publishDate
+                        image { url1X1 }
+                        audios { url downloadUrl mimeType allowDownload }
+                        programSet { title }
+                        publicationService { title }
+                      }
+                      ... on ProgramSet {
+                        id
+                        title
+                        synopsis
+                        numberOfElements
+                        image { url1X1 }
+                      }
+                    }
+                  }
+                }
+            `, { query: searchText, first: 20, after: cursor }, function(data, status) {
+                loading = false
+                if (status !== 200) {
+                    notify.show(qsTrId("id-failed-to-fetch-data"))
+                    return
+                }
+                var searchResult = data["data"]["search"]
+                content.items.nodes = content.items.nodes.concat(searchResult.nodes)
+                cursor = searchResult.pageInfo.endCursor
+                hasNextPage = searchResult.pageInfo.hasNextPage
+                addPodcasts(searchResult.nodes)
+            })
+        } else {
+            // Fallback
+            Api.request(query.replace("{offset}", String(count)), function(data, status) {
+                loading = false
+                if (status !== 200) {
+                    notify.show(qsTrId("id-failed-to-fetch-data"))
+                    return
+                }
+                var obj = content
+                obj["items"]["nodes"] = content["items"]["nodes"].concat(data["data"][contentKey]["items"]["nodes"])
+                content = obj
+                addPodcasts(data["data"][contentKey]["items"]["nodes"])
+            })
+        }
     }
 
     function addPodcast(item) {

@@ -16,7 +16,24 @@ Page {
     function load() {
         loading = true
         console.log(contentId)
-        Api.request("/editorialcategories/" + contentId, function(data, status) {
+        Api.graphql(`
+            query($id: ID!) {
+              editorialCategory(id: $id) {
+                id
+                title
+                description
+                editorialCollections(first: 20) {
+                  nodes {
+                    id
+                    title
+                    synopsis
+                    image { url1X1 }
+                    numberOfElements
+                  }
+                }
+              }
+            }
+        `, { id: contentId }, function(data, status) {
             loading = false
             if (status !== 200) {
                 //% "Failed to fetch data"
@@ -24,7 +41,12 @@ Page {
                 return
             }
 
-            category = data["data"]["editorialCategory"]
+            var cat = data["data"]["editorialCategory"]
+            cat.sections = [{
+                type: "featured_programset",
+                nodes: cat.editorialCollections.nodes
+            }]
+            category = cat
         })
     }
 

@@ -10,7 +10,18 @@ Page {
 
     function load() {
         loading = true
-        Api.request("/editorialcategories", function(data, status) {
+        Api.graphql(`
+            {
+              editorialCategories(first: 50) {
+                nodes {
+                  id
+                  title
+                  description
+                  numberOfElements
+                }
+              }
+            }
+        `, null, function(data, status) {
             loading = false
 
             if (status !== 200) {

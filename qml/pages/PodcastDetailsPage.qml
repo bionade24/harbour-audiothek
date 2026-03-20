@@ -26,7 +26,39 @@ Page {
 
     function load() {
         loading = true
-        Api.request("/items/" + contentId, function(data, status) {
+        Api.graphql(`
+            query($id: ID!) {
+              item(id: $id) {
+                id
+                title
+                synopsis
+                duration
+                publishDate
+                episodeNumber
+                keywords
+                image { url url1X1 url3X4 url16X9 }
+                audios {
+                  url
+                  downloadUrl
+                  mimeType
+                  allowDownload
+                }
+                audioList {
+                  availableTo
+                  audioBitrate
+                  audioCodec
+                }
+                programSet {
+                  id
+                  title
+                  synopsis
+                }
+                publicationService {
+                  title
+                }
+              }
+            }
+        `, { id: contentId }, function(data, status) {
             loading = false
             console.log(contentId)
             if (status !== 200) {

@@ -25,7 +25,32 @@ Page {
 
     function load() {
         loading = true
-        Api.request("/homescreen", function(data, status) {
+        Api.graphql(`
+            {
+              editorialCollections(
+                first: 10,
+                filter: { isActive: { equalTo: true } }
+              ) {
+                nodes {
+                  id
+                  title
+                  synopsis
+                  image { url1X1 }
+                  numberOfElements
+                  items(first: 5) {
+                    nodes {
+                      id
+                      title
+                      synopsis
+                      duration
+                      publishDate
+                      image { url1X1 }
+                    }
+                  }
+                }
+              }
+            }
+        `, null, function(data, status) {
             loading = false
 
             if (status !== 200) {
@@ -34,14 +59,14 @@ Page {
                 return
             }
 
-            featuredProgramSets = data["_embedded"]["mt:featuredProgramSets"]["_embedded"]["mt:programSets"]
-            featuredProgramSetTitle = data["_embedded"]["mt:featuredProgramSets"]["title"]
+            featuredProgramSets = data["data"]["editorialCollections"]["nodes"]
+            featuredProgramSetTitle = "Collections" // or from data?
 
-            items = data["_embedded"]["mt:items"]["_embedded"]["mt:items"]
-            itemsTitle = data["_embedded"]["mt:items"]["title"]
+            items = [] // TODO: query for items
+            itemsTitle = "Items"
 
-            mostPlayed = data["_embedded"]["mt:mostPlayed"]["_embedded"]["mt:Item"]
-            stageItems = data["_embedded"]["mt:stageItems"]["_embedded"]["mt:items"]
+            mostPlayed = [] // TODO
+            stageItems = [] // TODO
 
             initialized = true
         })

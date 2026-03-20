@@ -6,11 +6,7 @@ on:
       - master
     tags:
       - '*'
-  # to prevent secrets leaking,
-  # we don't build on PRs
-  #pull_request:
-  #  branches:
-  #    - master
+  workflow_dispatch:
 
 jobs:
   build:
@@ -46,7 +42,7 @@ jobs:
           arch: aarch64
       
       - name: Upload build result
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v7
         with:
           name: rpm-build-result
           path: RPMS
